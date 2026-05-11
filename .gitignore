@@ -12,6 +12,7 @@ debug.py
 #pycharm
 **/.idea/
 venv/
+*.venv/
 
 # jupyter
 **/.ipynb_checkpoints/
