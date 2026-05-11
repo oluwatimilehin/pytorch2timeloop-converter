@@ -32,19 +32,18 @@ from pytorch2timeloop.utils.layer_descriptions import (
     ConvLayerDescription,
     MaxPoolLayerDescription,
     MatrixMatrixMultiplyLayerDescription,
-    MatmulFuncDescription
+    MatmulFuncDescription,
+    ViewFuncDescription,
 )
 
 logger = logging.getLogger(__name__)
 
 
 @singledispatch
-def generate_description(module,
-                         input: torch.Tensor,
-                         output: torch.Tensor,
-                         name: str,
-                         ifmap_name: str):
-    raise NotImplementedError(f'not implemented for {type(module)}')
+def generate_description(
+    module, input: torch.Tensor, output: torch.Tensor, name: str, ifmap_name: str
+):
+    raise NotImplementedError(f"not implemented for {type(module)}")
 
 
 @generate_description.register(nn.Conv2d)
@@ -64,8 +63,8 @@ def _(module, input, output, name, ifmap_name):
         w_stride=module.stride[1],
         h_stride=module.stride[0],
         ifmap_name=ifmap_name,
-        filter_name=f'{name}_filter',
-        ofmap_name=f'{name}_out'
+        filter_name=f"{name}_filter",
+        ofmap_name=f"{name}_out",
     )
     return description
 
@@ -98,7 +97,7 @@ def _(module, input, output, name, ifmap_name):
         n=input.shape[0],
         name=name,
         ifmap_name=ifmap_name,
-        ofmap_name=f'{name}_out'
+        ofmap_name=f"{name}_out",
     )
 
     return description
@@ -108,8 +107,8 @@ def _(module, input, output, name, ifmap_name):
 def _(module, input, output, name, ifmap_name):
     stride_w = input.shape[-1] // output.shape[-1]
     stride_h = input.shape[-2] // output.shape[-2]
-    kernel_w = input.shape[-1] - (output.shape[-1]-1)*stride_w
-    kernel_h = input.shape[-2] - (output.shape[-2]-1)*stride_h
+    kernel_w = input.shape[-1] - (output.shape[-1] - 1) * stride_w
+    kernel_h = input.shape[-2] - (output.shape[-2] - 1) * stride_h
 
     description = MaxPoolLayerDescription(
         w=input.shape[3],
@@ -124,7 +123,7 @@ def _(module, input, output, name, ifmap_name):
         n=input.shape[0],
         name=name,
         ifmap_name=ifmap_name,
-        ofmap_name=f'{name}_out'
+        ofmap_name=f"{name}_out",
     )
 
     return description
@@ -147,39 +146,50 @@ def _(module, input, output, name, ifmap_name):
         n=input.shape[0],
         name=name,
         ifmap_name=ifmap_name,
-        filter_name=f'{name}_filter',
-        ofmap_name=f'{name}_out'
+        filter_name=f"{name}_filter",
+        ofmap_name=f"{name}_out",
     )
     return description
 
 
-def generate_matmul_func(input1, input2, output,
-                         name, input1_name, input2_name):
+@generate_description.register(nn.Flatten)
+def _(module, input, output, name, ifmap_name):
+    description = ViewFuncDescription(
+        name=name,
+        ifmap_shape=input.shape,
+        ofmap_shape=output.shape,
+        ifmap_name=ifmap_name,
+        ofmap_name=f"{name}_out",
+    )
+    return description
+
+
+def generate_matmul_func(input1, input2, output, name, input1_name, input2_name):
     if len(input1.shape) == 2 and len(input2.shape) == 2:
         description = MatmulFuncDescription(
-            name = name,
-            m = input1.shape[0],
-            n = input2.shape[1],
-            k = input1.shape[1],
-            ifmap1_name = input1_name,
-            ifmap2_name = input2_name,
-            ofmap_name = f'{name}_out',
-            extra_dims = tuple()
+            name=name,
+            m=input1.shape[0],
+            n=input2.shape[1],
+            k=input1.shape[1],
+            ifmap1_name=input1_name,
+            ifmap2_name=input2_name,
+            ofmap_name=f"{name}_out",
+            extra_dims=tuple(),
         )
     elif len(input1.shape) > 2 and input1.shape[:-2] == input2.shape[:-2]:
         description = MatmulFuncDescription(
-            name = name,
-            m = input1.shape[0],
-            n = input2.shape[1],
-            k = input1.shape[1],
-            ifmap1_name = input1_name,
-            ifmap2_name = input2_name,
-            ofmap_name = f'{name}_out',
-            extra_dims = input1.shape[:-2]
+            name=name,
+            m=input1.shape[0],
+            n=input2.shape[1],
+            k=input1.shape[1],
+            ifmap1_name=input1_name,
+            ifmap2_name=input2_name,
+            ofmap_name=f"{name}_out",
+            extra_dims=input1.shape[:-2],
         )
     else:
         raise NotImplementedError(
-            f'unimplemented for arg shapes {input1.shape}, {input2.shape}'
+            f"unimplemented for arg shapes {input1.shape}, {input2.shape}"
         )
 
     return description
